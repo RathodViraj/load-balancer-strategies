@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -21,7 +22,6 @@ const (
 func red(s string) string    { return colorRed + s + colorReset }
 func yellow(s string) string { return colorYellow + s + colorReset }
 
-// Simulation helpers
 func simulateRoundRobin() {
 	fmt.Println("== Round Robin ==")
 	rr := lbpkg.NewRoundRobin(lbpkg.Servers)
@@ -274,7 +274,6 @@ func main() {
 	simulateConsistentHashing()
 }
 
-// --- Live mode helpers (call the LB endpoints) ---
 func doGet(url string) (string, error) {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -318,14 +317,26 @@ func simulateWeightedLive() {
 func simulateLeastConnectionsLive() {
 	fmt.Println("== Least Connections (live) ==")
 	total := 12
+	var wg sync.WaitGroup
+	wg.Add(total)
+	resp := make([]string, total)
 	for i := 1; i <= total; i++ {
-		url := fmt.Sprintf("http://localhost:8000/least_connection?path=home")
-		body, err := doGet(url)
-		if err != nil {
-			fmt.Printf("Req %2d -> %s %v\n", i, red("error"), err)
-			continue
-		}
-		fmt.Printf("Req %2d -> %s\n", i, body)
+		go func(i int) {
+			url := fmt.Sprintf("http://localhost:8000/least_connection?path=home")
+			body, err := doGet(url)
+			if err != nil {
+				fmt.Printf("Req %2d -> %s %v\n", i, red("error"), err)
+			} else {
+				res := fmt.Sprintf("Req %2d -> %s\n", i, body)
+				resp[i-1] = res
+			}
+			wg.Done()
+		}(i)
+	}
+
+	wg.Wait()
+	for _, res := range resp {
+		fmt.Print(res)
 	}
 	fmt.Println()
 }

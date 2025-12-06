@@ -6,6 +6,7 @@ import (
 	"hash/fnv"
 	"io"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"sort"
@@ -67,7 +68,6 @@ func (rr *RoundRobin) Handler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(body))
 }
 
-// Next returns the next server according to round-robin and updates counters.
 func (rr *RoundRobin) Next() string {
 	rr.Mu.Lock()
 	if len(rr.Servers) == 0 {
@@ -82,7 +82,6 @@ func (rr *RoundRobin) Next() string {
 	return serverAddr
 }
 
-// Weighted Round Robin
 type WeightedRR struct {
 	Servers       []string
 	Weights       []int
@@ -176,12 +175,10 @@ func (wrr *WeightedRR) Handler(w http.ResponseWriter, r *http.Request) {
 	w.Write(body)
 }
 
-// Next returns the next server according to weighted round-robin.
 func (wrr *WeightedRR) Next() string {
 	return wrr.nextServer()
 }
 
-// Least Connections
 type LeastConn struct {
 	Servers           []string
 	NumberOfServers   int
@@ -223,6 +220,7 @@ func (lc *LeastConn) Handler(w http.ResponseWriter, r *http.Request) {
 	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/%s", serverAddr, path), nil)
 	c := &http.Client{Timeout: 10 * time.Second}
 	resp, err := c.Do(req)
+	time.Sleep(time.Duration(rand.Intn(10)) * time.Second)
 
 	lc.Mu.Lock()
 	lc.ActiveConnections[minIndex] -= 1
@@ -236,7 +234,6 @@ func (lc *LeastConn) Handler(w http.ResponseWriter, r *http.Request) {
 	w.Write(body)
 }
 
-// Next selects the server with least active connections and increments its counter.
 func (lc *LeastConn) Next() string {
 	lc.Mu.Lock()
 	if len(lc.Servers) == 0 {
@@ -257,7 +254,6 @@ func (lc *LeastConn) Next() string {
 	return server
 }
 
-// Release decrements the active connection count for the given server.
 func (lc *LeastConn) Release(server string) {
 	lc.Mu.Lock()
 	defer lc.Mu.Unlock()
